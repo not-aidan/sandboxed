@@ -7,6 +7,21 @@ use winit::{
 mod renderer;
 use renderer::Renderer;
 
+const WORLD_SIZE: usize = 18;
+
+#[allow(dead_code)]
+struct World {
+    cells: [[bool; WORLD_SIZE]; WORLD_SIZE],
+}
+
+impl Default for World {
+    fn default() -> Self {
+        Self {
+            cells: [[false; WORLD_SIZE]; WORLD_SIZE],
+        }
+    }
+}
+
 #[tokio::main]
 async fn main() -> Result<(), ()> {
     env_logger::init();
