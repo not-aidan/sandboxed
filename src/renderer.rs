@@ -1,17 +1,76 @@
+use wgpu::util::DeviceExt;
 use winit::window::Window;
+
+use crate::world::{World, WORLD_SIZE};
+
+#[repr(C)]
+#[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
+pub struct Vertex {
+    pub position: [f32; 2],
+}
+
+impl Vertex {
+    fn descriptor<'a>() -> wgpu::VertexBufferLayout<'a> {
+        println!("Stride: {:?}", std::mem::size_of::<Vertex>());
+        wgpu::VertexBufferLayout {
+            array_stride: std::mem::size_of::<Vertex>() as wgpu::BufferAddress,
+            step_mode: wgpu::VertexStepMode::Vertex,
+            attributes: &[wgpu::VertexAttribute {
+                offset: 0,
+                shader_location: 0,
+                format: wgpu::VertexFormat::Float32x2,
+            }],
+        }
+    }
+}
+
+const INDICES: &[u16] = &[0, 1, 2, 2, 3, 0];
+
+const WORLD_TEXTURE_SIZE: wgpu::Extent3d = wgpu::Extent3d {
+    width: WORLD_SIZE,
+    height: WORLD_SIZE,
+    depth_or_array_layers: 1,
+};
 
 pub struct Renderer {
     surface: wgpu::Surface,
     device: wgpu::Device,
     queue: wgpu::Queue,
     config: wgpu::SurfaceConfiguration,
+    world_texture: wgpu::Texture,
+    vertex_buffer: wgpu::Buffer,
+    index_buffer: wgpu::Buffer,
+    indices: u32,
     pub size: winit::dpi::PhysicalSize<u32>,
     window: Window,
     render_pipeline: wgpu::RenderPipeline,
 }
 
 impl Renderer {
-    pub fn render(&mut self) -> Result<(), wgpu::SurfaceError> {
+    fn load_world(&mut self, world: &World) {
+        self.queue.write_texture(
+            // Tells wgpu where to copy the pixel data
+            wgpu::ImageCopyTexture {
+                texture: &self.world_texture,
+                mip_level: 0,
+                origin: wgpu::Origin3d::ZERO,
+                aspect: wgpu::TextureAspect::All,
+            },
+            // The actual pixel data
+            world.pixels().as_slice(),
+            // The layout of the texture
+            wgpu::ImageDataLayout {
+                offset: 0,
+                bytes_per_row: std::num::NonZeroU32::new(4 * WORLD_SIZE),
+                rows_per_image: std::num::NonZeroU32::new(WORLD_SIZE),
+            },
+            WORLD_TEXTURE_SIZE,
+        );
+    }
+
+    pub fn render(&mut self, world: &World) -> Result<(), wgpu::SurfaceError> {
+        self.load_world(world);
+
         let output = self.surface.get_current_texture()?;
         let view = output
             .texture
@@ -43,7 +102,9 @@ impl Renderer {
             });
 
             render_pass.set_pipeline(&self.render_pipeline);
-            render_pass.draw(0..3, 0..1);
+            render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
+            render_pass.set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
+            render_pass.draw_indexed(0..self.indices, 0, 0..1);
         }
 
         // submit will accept anything that implements IntoIter
@@ -63,7 +124,7 @@ impl Renderer {
         // The instance is a handle to our GPU
         // Backends::all => Vulkan + Metal + DX12 + Browser WebGPU
         let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
-            backends: wgpu::Backends::all(),
+            backends: wgpu::Backends::PRIMARY,
             dx12_shader_compiler: Default::default(),
         });
 
@@ -132,13 +193,39 @@ impl Renderer {
                 push_constant_ranges: &[],
             });
 
+        let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Vertex Buffer"),
+            contents: bytemuck::cast_slice(&[
+                Vertex {
+                    position: [-0.5, -0.5],
+                },
+                Vertex {
+                    position: [0.5, -0.5],
+                },
+                Vertex {
+                    position: [0.5, 0.5],
+                },
+                Vertex {
+                    position: [-0.5, 0.5],
+                },
+            ]),
+            usage: wgpu::BufferUsages::VERTEX,
+        });
+
+        let index_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Index Buffer"),
+            contents: bytemuck::cast_slice(INDICES),
+            usage: wgpu::BufferUsages::INDEX,
+        });
+        let indices = INDICES.len() as u32;
+
         let render_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
             label: Some("Render Pipeline"),
             layout: Some(&render_pipeline_layout),
             vertex: wgpu::VertexState {
                 module: &shader,
                 entry_point: "vs_main",
-                buffers: &[],
+                buffers: &[Vertex::descriptor()],
             },
             fragment: Some(wgpu::FragmentState {
                 module: &shader,
@@ -170,14 +257,39 @@ impl Renderer {
             multiview: None,
         });
 
+        let world_texture = device.create_texture(&wgpu::TextureDescriptor {
+            size: WORLD_TEXTURE_SIZE,
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            // Most images are stored using sRGB so we need to reflect that here.
+            format: wgpu::TextureFormat::Rgba8UnormSrgb,
+            // TEXTURE_BINDING tells wgpu that we want to use this texture in shaders
+            // COPY_DST means that we want to copy data to this texture
+            usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
+            label: Some("diffuse_texture"),
+            // This is the same as with the SurfaceConfig. It
+            // specifies what texture formats can be used to
+            // create TextureViews for this texture. The base
+            // texture format (Rgba8UnormSrgb in this case) is
+            // always supported. Note that using a different
+            // texture format is not supported on the WebGL2
+            // backend.
+            view_formats: &[],
+        });
+
         Self {
+            indices,
             window,
+            world_texture,
             surface,
             device,
             queue,
             config,
             size,
             render_pipeline,
+            vertex_buffer,
+            index_buffer,
         }
     }
 

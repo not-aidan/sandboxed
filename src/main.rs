@@ -5,28 +5,15 @@ use winit::{
 };
 
 mod renderer;
-use renderer::Renderer;
-
-const WORLD_SIZE: usize = 18;
-
-#[allow(dead_code)]
-struct World {
-    cells: [[bool; WORLD_SIZE]; WORLD_SIZE],
-}
-
-impl Default for World {
-    fn default() -> Self {
-        Self {
-            cells: [[false; WORLD_SIZE]; WORLD_SIZE],
-        }
-    }
-}
+mod world;
+use self::{renderer::Renderer, world::World};
 
 #[tokio::main]
 async fn main() -> Result<(), ()> {
     env_logger::init();
     let event_loop = EventLoop::new();
     let window = WindowBuilder::new().build(&event_loop).unwrap();
+    let world = World::default();
     let mut renderer = Renderer::new(window).await;
 
     event_loop.run(move |event, _, control_flow| match event {
@@ -47,7 +34,7 @@ async fn main() -> Result<(), ()> {
             _ => {}
         },
         Event::RedrawRequested(window_id) if window_id == renderer.window().id() => {
-            match renderer.render() {
+            match renderer.render(&world) {
                 Ok(_) => {}
                 // Reconfigure the surface if lost
                 Err(wgpu::SurfaceError::Lost) => renderer.resize(renderer.size),
