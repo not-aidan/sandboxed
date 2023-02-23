@@ -1,7 +1,7 @@
 pub const WORLD_SIZE: u32 = 18;
 
-#[derive(Copy, Clone)]
-enum CellType {
+#[derive(Copy, Clone, PartialEq)]
+pub enum CellType {
     Air,
     Sand,
 }
@@ -32,11 +32,9 @@ pub struct World {
 
 impl Default for World {
     fn default() -> Self {
-        let mut world = Self {
+        Self {
             cells: [[CellType::Air; WORLD_SIZE as usize]; WORLD_SIZE as usize],
-        };
-        world.cells[5][5] = CellType::Sand;
-        world
+        }
     }
 }
 
@@ -52,5 +50,28 @@ impl World {
         }
 
         pixels
+    }
+
+    pub fn update(&mut self) {
+        for y in 0usize..WORLD_SIZE as usize {
+            for x in 0usize..WORLD_SIZE as usize { 
+                let cell = self.cells[y][x];
+                if y > 0 && cell == CellType::Sand && self.get_cell(x, y - 1) == Some(CellType::Air) {
+                    self.set_cell(x, y, CellType::Air);
+                    self.set_cell(x, y - 1, CellType::Sand);
+                }
+            }
+        }
+    }
+
+    pub fn get_cell(&self, x: usize, y: usize) -> Option<CellType> {
+        if let Some(row) = self.cells.get(y) {
+            return row.get(x).copied();
+        }
+        None
+    }
+
+    pub fn set_cell(&mut self, x: usize, y: usize, cell: CellType) {
+        self.cells[y][x] = cell;
     }
 }

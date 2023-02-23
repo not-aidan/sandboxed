@@ -1,3 +1,5 @@
+use std::time::Instant;
+
 use winit::{
     event::*,
     event_loop::{ControlFlow, EventLoop},
@@ -6,14 +8,18 @@ use winit::{
 
 mod renderer;
 mod world;
-use self::{renderer::Renderer, world::World};
+use self::{renderer::Renderer, world::{World, WORLD_SIZE}};
+
+const WORLD_UPDATE_TIME: f32 = 1.0;
 
 #[tokio::main]
 async fn main() -> Result<(), ()> {
     env_logger::init();
     let event_loop = EventLoop::new();
     let window = WindowBuilder::new().build(&event_loop).unwrap();
-    let world = World::default();
+    let mut last_frame = Instant::now();
+    let mut last_world_step = Instant::now();
+    let mut world = World::default();
     let mut renderer = Renderer::new(window).await;
 
     event_loop.run(move |event, _, control_flow| match event {
@@ -34,6 +40,14 @@ async fn main() -> Result<(), ()> {
             _ => {}
         },
         Event::RedrawRequested(window_id) if window_id == renderer.window().id() => {
+            let time = Instant::now();
+
+            if time.duration_since(last_world_step).as_secs_f32() >= WORLD_UPDATE_TIME {
+                world.set_cell(3, WORLD_SIZE as usize - 1, world::CellType::Sand);
+                world.update();
+                last_world_step = time;
+            }
+
             match renderer.render(&world) {
                 Ok(_) => {}
                 // Reconfigure the surface if lost
@@ -43,6 +57,7 @@ async fn main() -> Result<(), ()> {
                 // All other errors (Outdated, Timeout) should be resolved by the next frame
                 Err(e) => eprintln!("{:?}", e),
             }
+            last_frame = time;
         }
         Event::MainEventsCleared => {
             // RedrawRequested will only trigger once, unless we manually
