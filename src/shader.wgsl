@@ -1,4 +1,10 @@
 // Vertex shader
+struct WindowUniform {
+    size: vec2<f32>,
+};
+
+@group(1) @binding(0)
+var<uniform> window: WindowUniform;
 
 struct VertexInput {
     @location(0) position: vec2<f32>,
@@ -15,7 +21,7 @@ fn vs_main(
 	model: VertexInput,
 ) -> VertexOutput {
     var out: VertexOutput;
-    out.clip_position = vec4<f32>(model.position, 0.5, 1.0);
+    out.clip_position = vec4<f32>((model.position + window.size / 2.0) / window.size * 2.0 - 1.0, 0.5, 1.0);
 	out.tex_coords = model.tex_coords;
     return out;
 }

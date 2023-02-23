@@ -8,7 +8,10 @@ use winit::{
 
 mod renderer;
 mod world;
-use self::{renderer::Renderer, world::{World, WORLD_SIZE}};
+use self::{
+    renderer::Renderer,
+    world::{World, WORLD_SIZE},
+};
 
 const WORLD_UPDATE_TIME: f32 = 1.0;
 

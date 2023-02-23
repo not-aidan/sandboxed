@@ -54,9 +54,10 @@ impl World {
 
     pub fn update(&mut self) {
         for y in 0usize..WORLD_SIZE as usize {
-            for x in 0usize..WORLD_SIZE as usize { 
+            for x in 0usize..WORLD_SIZE as usize {
                 let cell = self.cells[y][x];
-                if y > 0 && cell == CellType::Sand && self.get_cell(x, y - 1) == Some(CellType::Air) {
+                if y > 0 && cell == CellType::Sand && self.get_cell(x, y - 1) == Some(CellType::Air)
+                {
                     self.set_cell(x, y, CellType::Air);
                     self.set_cell(x, y - 1, CellType::Sand);
                 }
