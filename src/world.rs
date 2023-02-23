@@ -3,10 +3,15 @@ use rand::Rng;
 
 pub const WORLD_SIZE: u32 = 100;
 pub const GRAVITY: Vector2<f32> = Vector2::new(0.0, -0.3);
+pub const WORM_FORCE: f32 = 10.0;
+pub const WORM_COORDINATE: Coordinate = Coordinate::new(25, 25);
+
 pub type Coordinate = Vector2<u32>;
 
 trait Difference<T> {
     fn difference(&self, other: &Self) -> T;
+    fn as_f32(&self) -> Vector2<f32>;
+    fn in_bounds(&self) -> bool;
 }
 
 impl Difference<Vector2<i32>> for Coordinate {
@@ -15,6 +20,14 @@ impl Difference<Vector2<i32>> for Coordinate {
             self.x as i32 - other.x as i32,
             self.y as i32 - other.y as i32,
         )
+    }
+
+    fn as_f32(&self) -> Vector2<f32> {
+        Vector2::new(self.x as f32, self.y as f32)
+    }
+
+    fn in_bounds(&self) -> bool {
+        self.x < WORLD_SIZE && self.y < WORLD_SIZE
     }
 }
 
@@ -109,24 +122,47 @@ impl World {
 
     fn update_cell(&mut self, mut coordinate: Coordinate, cell: CellElement) {
         if let CellElement::Sand(mut velocity) = cell {
+            if velocity.magnitude_squared() > 1000.0 {
+                println!("WARN:coordinate{coordinate}velocity{velocity}");
+            }
+            // forces
+            // gravity
             velocity += GRAVITY;
-            self.set_cell(&coordinate, CellElement::Sand(velocity));
+
+            // worm
+            let worm_difference = WORM_COORDINATE.as_f32() - coordinate.as_f32();
+            if worm_difference.magnitude_squared() > 9.0 {
+                velocity += worm_difference.normalize()
+                    * (WORM_FORCE / worm_difference.magnitude_squared());
+            }
 
             let destination: Coordinate;
             {
-                let position =
-                    Vector2::<f32>::new(coordinate.x as f32, coordinate.y as f32) + velocity;
-                destination = Coordinate::new(
-                    position.x.floor().max(0.0) as u32,
-                    position.y.floor().max(0.0) as u32,
-                );
+                let mut x = (coordinate.x as f32 + velocity.x).floor();
+                let mut y = (coordinate.y as f32 + velocity.y).floor();
+
+                // prevent overflows
+                if x < 0.0 {
+                    x = 0.0;
+                    velocity.x = 0.0;
+                }
+
+                if y < 0.0 {
+                    y = 0.0;
+                    velocity.y = 0.0;
+                }
+
+                destination = Coordinate::new(x as u32, y as u32);
             }
+
+            self.set_cell(&coordinate, CellElement::Sand(velocity));
 
             if destination == coordinate {
                 return;
             }
 
             for step_coordinate in path(&coordinate, &destination).drain(..) {
+                // check if blocked
                 if let Some(CellElement::Sand(..)) = self.get_cell(&step_coordinate) {
                     // change trajectory to a random empty neighbor
                     let unit = step_coordinate.difference(&coordinate);
@@ -141,7 +177,9 @@ impl World {
                                 (coordinate.y as i32 + neighbor.y) as u32,
                             );
 
-                            if self.get_cell(&neighbor_coordinate) != Some(CellElement::Air) {
+                            if !neighbor_coordinate.in_bounds()
+                                || self.get_cell(&neighbor_coordinate) != Some(CellElement::Air)
+                            {
                                 continue;
                             }
 
