@@ -55,12 +55,26 @@ impl World {
     pub fn update(&mut self) {
         for y in 0usize..WORLD_SIZE as usize {
             for x in 0usize..WORLD_SIZE as usize {
-                let cell = self.cells[y][x];
-                if y > 0 && cell == CellType::Sand && self.get_cell(x, y - 1) == Some(CellType::Air)
-                {
-                    self.set_cell(x, y, CellType::Air);
-                    self.set_cell(x, y - 1, CellType::Sand);
-                }
+                self.update_cell(x, y, self.cells[y][x]);
+            }
+        }
+    }
+
+    fn update_cell(&mut self, x: usize, y: usize, cell: CellType) {
+        if let CellType::Sand = cell {
+            if y == 0 {
+                return;
+            }
+
+            if self.get_cell(x, y - 1) == Some(CellType::Air) {
+                self.set_cell(x, y, CellType::Air);
+                self.set_cell(x, y - 1, CellType::Sand);
+            } else if self.get_cell(x + 1, y - 1) == Some(CellType::Air) {
+                self.set_cell(x, y, CellType::Air);
+                self.set_cell(x + 1, y - 1, CellType::Sand);
+            } else if x > 0 && self.get_cell(x - 1, y - 1) == Some(CellType::Air) {
+                self.set_cell(x, y, CellType::Air);
+                self.set_cell(x - 1, y - 1, CellType::Sand);
             }
         }
     }
