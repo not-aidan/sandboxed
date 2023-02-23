@@ -13,7 +13,7 @@ use self::{
     world::{World, WORLD_SIZE},
 };
 
-const WORLD_UPDATE_TIME: f32 = 0.01;
+const WORLD_UPDATE_TIME: f32 = 0.1;
 
 #[tokio::main]
 async fn main() -> Result<(), ()> {
@@ -49,7 +49,10 @@ async fn main() -> Result<(), ()> {
             let time = Instant::now();
 
             if time.duration_since(last_world_step).as_secs_f32() >= WORLD_UPDATE_TIME {
-                world.set_cell(3, WORLD_SIZE as usize - 1, world::CellType::Sand);
+                let y = WORLD_SIZE as usize - 1;
+                if world.get_cell(3, y) == Some(world::CellElement::Air) {
+                    world.set_cell(3, y, world::CellElement::Sand(1.0));
+                }
                 world.update();
                 last_world_step = time;
             }
