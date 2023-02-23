@@ -1,4 +1,4 @@
-pub const WORLD_SIZE: u32 = 18;
+pub const WORLD_SIZE: u32 = 200;
 
 #[derive(Copy, Clone, PartialEq)]
 pub enum CellType {

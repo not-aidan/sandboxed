@@ -13,7 +13,7 @@ use self::{
     world::{World, WORLD_SIZE},
 };
 
-const WORLD_UPDATE_TIME: f32 = 0.1;
+const WORLD_UPDATE_TIME: f32 = 0.01;
 
 #[tokio::main]
 async fn main() -> Result<(), ()> {
