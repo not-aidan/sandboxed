@@ -1,5 +1,6 @@
 use std::time::Instant;
 
+use nalgebra::Vector2;
 use rand::Rng;
 use winit::{
     event::*,
@@ -11,7 +12,7 @@ mod renderer;
 mod world;
 use self::{
     renderer::Renderer,
-    world::{World, WORLD_SIZE},
+    world::{World, WORLD_SIZE, Coordinate},
 };
 
 const WORLD_UPDATE_TIME: f32 = 0.1;
@@ -50,10 +51,10 @@ async fn main() -> Result<(), ()> {
             let time = Instant::now();
 
             if time.duration_since(last_world_step).as_secs_f32() >= WORLD_UPDATE_TIME {
-                let y = WORLD_SIZE - 1;
-                let x = WORLD_SIZE / 2;
-                if world.get_cell(x, y) == Some(world::CellElement::Air) {
-                    world.set_cell(x, y, world::CellElement::Sand(rand::thread_rng().gen_range(0.0..=2.0)));
+                let coordinate = Coordinate::new(WORLD_SIZE / 2, WORLD_SIZE - 1);
+
+                if world.get_cell(&coordinate) == Some(world::CellElement::Air) {
+                    world.set_cell(&coordinate, world::CellElement::Sand(Vector2::new(0.0, rand::thread_rng().gen_range(-2.0..=0.0))));
                 }
                 world.update();
                 last_world_step = time;
