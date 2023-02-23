@@ -1,5 +1,6 @@
 use std::time::Instant;
 
+use rand::Rng;
 use winit::{
     event::*,
     event_loop::{ControlFlow, EventLoop},
@@ -51,7 +52,7 @@ async fn main() -> Result<(), ()> {
             if time.duration_since(last_world_step).as_secs_f32() >= WORLD_UPDATE_TIME {
                 let y = WORLD_SIZE as usize - 1;
                 if world.get_cell(3, y) == Some(world::CellElement::Air) {
-                    world.set_cell(3, y, world::CellElement::Sand(1.0));
+                    world.set_cell(3, y, world::CellElement::Sand(rand::thread_rng().gen_range(0.0..=2.0)));
                 }
                 world.update();
                 last_world_step = time;

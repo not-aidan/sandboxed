@@ -67,7 +67,13 @@ impl World {
 
     fn update_cell(&mut self, x: usize, mut y: usize, cell: CellElement) {
         if let CellElement::Sand(mut velocity) = cell {
+            if velocity < 1.0 {
+                self.set_cell(x, y, CellElement::Sand(velocity + GRAVITY));
+                return;
+            }
+
             velocity += GRAVITY;
+
             let mut distance = velocity.floor() as u32;
             while y > 0 && distance > 0 {
                 if y == 0 {
