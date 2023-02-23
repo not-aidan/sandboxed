@@ -1,3 +1,5 @@
+use rand::Rng;
+
 pub const WORLD_SIZE: u32 = 100;
 pub const GRAVITY: f32 = 0.3;
 
@@ -65,7 +67,7 @@ impl World {
         }
     }
 
-    fn update_cell(&mut self, x: usize, mut y: usize, cell: CellElement) {
+    fn update_cell(&mut self, mut x: usize, mut y: usize, cell: CellElement) {
         if let CellElement::Sand(mut velocity) = cell {
             if velocity < 1.0 {
                 self.set_cell(x, y, CellElement::Sand(velocity + GRAVITY));
@@ -80,15 +82,25 @@ impl World {
                     return;
                 }
 
+                let priority: i32 = rand::thread_rng().gen_range(0..=1) * 2 - 1;
+
                 if self.get_cell(x, y - 1) == Some(CellElement::Air) {
                     self.set_cell(x, y, CellElement::Air);
                     self.set_cell(x, y - 1, CellElement::Sand(velocity));
-                } else if self.get_cell(x + 1, y - 1) == Some(CellElement::Air) {
+                } else if (priority >= 0 || x > 0)
+                    && self.get_cell((x as i32 + priority) as usize, y - 1)
+                        == Some(CellElement::Air)
+                {
                     self.set_cell(x, y, CellElement::Air);
-                    self.set_cell(x + 1, y - 1, CellElement::Sand(velocity));
-                } else if x > 0 && self.get_cell(x - 1, y - 1) == Some(CellElement::Air) {
+                    x = (x as i32 + priority) as usize;
+                    self.set_cell(x, y - 1, CellElement::Sand(velocity));
+                } else if (priority >= 0 || x > 0)
+                    && self.get_cell((x as i32 - priority) as usize, y - 1)
+                        == Some(CellElement::Air)
+                {
                     self.set_cell(x, y, CellElement::Air);
-                    self.set_cell(x - 1, y - 1, CellElement::Sand(velocity));
+                    x = (x as i32 - priority) as usize;
+                    self.set_cell(x, y - 1, CellElement::Sand(velocity));
                 } else {
                     velocity = 0.0;
                 }
