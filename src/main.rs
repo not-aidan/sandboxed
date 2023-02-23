@@ -37,6 +37,9 @@ async fn main() -> Result<(), ()> {
                     },
                 ..
             } => *control_flow = ControlFlow::Exit,
+            WindowEvent::Resized(size) => {
+                renderer.resize(*size);
+            }
             _ => {}
         },
         Event::RedrawRequested(window_id) if window_id == renderer.window().id() => {
