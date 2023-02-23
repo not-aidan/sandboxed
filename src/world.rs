@@ -82,6 +82,7 @@ impl World {
                     return;
                 }
 
+                // decides which x-direction is prioritized
                 let priority: i32 = rand::thread_rng().gen_range(0..=1) * 2 - 1;
 
                 // messy, but this is made to prevent overflows from negatives :/

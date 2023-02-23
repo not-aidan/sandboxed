@@ -51,8 +51,9 @@ async fn main() -> Result<(), ()> {
 
             if time.duration_since(last_world_step).as_secs_f32() >= WORLD_UPDATE_TIME {
                 let y = WORLD_SIZE - 1;
-                if world.get_cell(3, y) == Some(world::CellElement::Air) {
-                    world.set_cell(3, y, world::CellElement::Sand(rand::thread_rng().gen_range(0.0..=2.0)));
+                let x = WORLD_SIZE / 2;
+                if world.get_cell(x, y) == Some(world::CellElement::Air) {
+                    world.set_cell(x, y, world::CellElement::Sand(rand::thread_rng().gen_range(0.0..=2.0)));
                 }
                 world.update();
                 last_world_step = time;
