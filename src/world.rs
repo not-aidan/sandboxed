@@ -15,14 +15,14 @@ impl CellElement {
     fn push_color(&self, pixels: &mut Vec<u8>) {
         match self {
             Self::Air => {
-                pixels.push(255);
-                pixels.push(255);
+                pixels.push(0);
+                pixels.push(0);
                 pixels.push(255);
                 pixels.push(255);
             }
             Self::Sand(..) => {
-                pixels.push(0);
-                pixels.push(0);
+                pixels.push(255);
+                pixels.push(255);
                 pixels.push(0);
                 pixels.push(0);
             }
