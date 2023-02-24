@@ -3,8 +3,7 @@ use rand::Rng;
 
 pub const WORLD_SIZE: u32 = 100;
 pub const GRAVITY: Vector2<f32> = Vector2::new(0.0, -0.3);
-pub const WORM_FORCE: f32 = 10.0;
-pub const WORM_COORDINATE: Coordinate = Coordinate::new(25, 25);
+const AIR_FRICTION: f32 = 0.2;
 
 pub type Coordinate = Vector2<u32>;
 
@@ -112,28 +111,43 @@ impl World {
         pixels
     }
 
-    pub fn update(&mut self) {
+    pub fn update(&mut self, forces: &Vec<Force>) {
         for y in 0..WORLD_SIZE {
             for x in 0..WORLD_SIZE {
-                self.update_cell(Coordinate::new(x, y), self.cells[y as usize][x as usize]);
+                self.update_cell(
+                    Coordinate::new(x, y),
+                    self.cells[y as usize][x as usize],
+                    forces,
+                );
             }
         }
     }
 
-    fn update_cell(&mut self, mut coordinate: Coordinate, cell: CellElement) {
+    fn update_cell(&mut self, mut coordinate: Coordinate, cell: CellElement, forces: &Vec<Force>) {
         if let CellElement::Sand(mut velocity) = cell {
             if velocity.magnitude_squared() > 1000.0 {
                 println!("WARN:coordinate{coordinate}velocity{velocity}");
             }
             // forces
-            // gravity
             velocity += GRAVITY;
 
-            // worm
-            let worm_difference = WORM_COORDINATE.as_f32() - coordinate.as_f32();
-            if worm_difference.magnitude_squared() > 9.0 {
-                velocity += worm_difference.normalize()
-                    * (WORM_FORCE / worm_difference.magnitude_squared());
+            {
+                let position = coordinate.as_f32();
+                for force in forces.iter() {
+                    let difference = force.position - position;
+                    let distance_squared = difference.magnitude_squared();
+                    if distance_squared >= force.min_distance_squared
+                        && distance_squared <= force.max_distance_squared
+                    {
+                        velocity += difference.normalize() * (force.strength / distance_squared);
+                    }
+                }
+            }
+            // friction
+            {
+                if velocity.magnitude_squared() > AIR_FRICTION * AIR_FRICTION {
+                    velocity -= velocity.normalize() * AIR_FRICTION;
+                }
             }
 
             let destination: Coordinate;
@@ -217,6 +231,13 @@ impl World {
     pub fn set_cell(&mut self, coordinate: &Coordinate, cell: CellElement) {
         self.cells[coordinate.y as usize][coordinate.x as usize] = cell;
     }
+}
+
+pub struct Force {
+    pub position: Vector2<f32>,
+    pub strength: f32,
+    pub min_distance_squared: f32,
+    pub max_distance_squared: f32,
 }
 
 /// translated from https://gist.github.com/DavidMcLaughlin208/60e69e698e3858617c322d80a8f174e2

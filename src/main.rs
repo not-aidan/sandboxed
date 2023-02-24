@@ -30,6 +30,8 @@ async fn main() -> Result<(), ()> {
     let mut world = World::default();
     let mut renderer = Renderer::new(window).await;
 
+    let worms = vec![Vector2::new(30.0, 30.0)];
+
     event_loop.run(move |event, _, control_flow| {
         match event {
             Event::WindowEvent {
@@ -70,7 +72,18 @@ async fn main() -> Result<(), ()> {
                             )),
                         );
                     }
-                    world.update();
+
+                    let mut forces = Vec::<world::Force>::new();
+                    for worm in worms.iter() {
+                        forces.push(world::Force {
+                            position: *worm,
+                            strength: 120.0,
+                            max_distance_squared: 600.0,
+                            min_distance_squared: 80.0,
+                        });
+                    }
+
+                    world.update(&forces);
                     last_world_step = time;
                 }
 
