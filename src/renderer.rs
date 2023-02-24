@@ -1,6 +1,7 @@
 use std::mem;
 
 use wgpu::util::DeviceExt;
+use wgpu_text::font::FontRef;
 use winit::window::Window;
 
 use crate::world::{World, WORLD_SIZE};
@@ -62,6 +63,7 @@ pub struct Renderer {
     world_bind_group: wgpu::BindGroup,
     window_buffer: wgpu::Buffer,
     window_bind_group: wgpu::BindGroup,
+    text_brush: wgpu_text::TextBrush<FontRef<'static>>,
 }
 
 impl Renderer {
@@ -86,7 +88,11 @@ impl Renderer {
         );
     }
 
-    pub fn render(&mut self, world: &World) -> Result<(), wgpu::SurfaceError> {
+    pub fn render(
+        &mut self,
+        world: &World,
+        text_sections: &Vec<wgpu_text::section::Section>,
+    ) -> Result<(), wgpu::SurfaceError> {
         self.load_world(world);
 
         // this doesn't need to write every frame, but I don't want to overcomplicate things
@@ -136,8 +142,16 @@ impl Renderer {
             render_pass.draw_indexed(0..self.indices, 0, 0..1);
         }
 
+        let mut command_buffers = vec![encoder.finish()];
+
+        // text
+        for section in text_sections.iter() {
+            self.text_brush.queue(section);
+            command_buffers.push(self.text_brush.draw(&self.device, &view, &self.queue));
+        }
+
         // submit will accept anything that implements IntoIter
-        self.queue.submit(std::iter::once(encoder.finish()));
+        self.queue.submit(command_buffers);
         output.present();
 
         Ok(())
@@ -401,7 +415,14 @@ impl Renderer {
             multiview: None,
         });
 
+        let text_brush = wgpu_text::BrushBuilder::using_font_bytes(include_bytes!(
+            "../assets/FiraCode-Regular.ttf"
+        ))
+        .unwrap()
+        .build(&device, &config);
+
         Self {
+            text_brush,
             indices,
             window,
             world_texture,
@@ -421,6 +442,8 @@ impl Renderer {
 
     pub fn resize(&mut self, new_size: winit::dpi::PhysicalSize<u32>) {
         if new_size.width > 0 && new_size.height > 0 {
+            self.text_brush
+                .resize_view(new_size.width as f32, new_size.height as f32, &self.queue);
             self.size = new_size;
             self.config.width = new_size.width;
             self.config.height = new_size.height;
