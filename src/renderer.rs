@@ -2,6 +2,7 @@ use std::mem;
 
 use wgpu::util::DeviceExt;
 use wgpu_text::font::FontRef;
+use wgpu_text::section::Section;
 use winit::window::Window;
 
 use crate::world::{World, WORLD_SIZE};
@@ -91,7 +92,7 @@ impl Renderer {
     pub fn render(
         &mut self,
         world: &World,
-        text_sections: &Vec<wgpu_text::section::Section>,
+        text_sections: &[Section],
     ) -> Result<(), wgpu::SurfaceError> {
         self.load_world(world);
 
