@@ -3,6 +3,7 @@ use wgpu_text::font::FontRef;
 use wgpu_text::section::Section;
 use winit::window::Window;
 
+use crate::base_renderer::BaseRenderer;
 use crate::sprite::{Sprite, SpriteBatch, SpriteRenderer};
 use crate::world::{World, WORLD_SIZE};
 use crate::worm::Worm;
@@ -14,22 +15,21 @@ const WORLD_TEXTURE_SIZE: wgpu::Extent3d = wgpu::Extent3d {
 };
 
 pub struct Renderer {
-    surface: wgpu::Surface,
-    device: wgpu::Device,
-    queue: wgpu::Queue,
-    config: wgpu::SurfaceConfiguration,
     sprite_renderer: SpriteRenderer,
+    base: BaseRenderer,
     world_texture: wgpu::Texture,
-    pub size: winit::dpi::PhysicalSize<u32>,
-    window: Window,
     world_bind_group: wgpu::BindGroup,
     circle_bind_group: wgpu::BindGroup,
     text_brush: wgpu_text::TextBrush<FontRef<'static>>,
 }
 
 impl Renderer {
+    pub fn size(&self) -> winit::dpi::PhysicalSize<u32> {
+        self.base.size
+    }
+
     fn load_world(&mut self, world: &World) {
-        self.queue.write_texture(
+        self.base.queue.write_texture(
             // Tells wgpu where to copy the pixel data
             wgpu::ImageCopyTexture {
                 texture: &self.world_texture,
@@ -57,7 +57,7 @@ impl Renderer {
     ) -> Result<(), wgpu::SurfaceError> {
         self.load_world(world);
 
-        let output = self.surface.get_current_texture()?;
+        let output = self.base.surface.get_current_texture()?;
         let view = output
             .texture
             .create_view(&wgpu::TextureViewDescriptor::default());
@@ -85,96 +85,35 @@ impl Renderer {
                     texture_bind_group: &self.circle_bind_group,
                 },
             ],
-            &self.device,
-            &self.queue,
+            &self.base.device,
+            &self.base.queue,
             &view,
-            [self.size.width as f32, self.size.height as f32],
+            [self.base.size.width as f32, self.base.size.height as f32],
         )];
 
         // text
         for section in text_sections.iter() {
             self.text_brush.queue(section);
-            command_buffers.push(self.text_brush.draw(&self.device, &view, &self.queue));
+            command_buffers.push(
+                self.text_brush
+                    .draw(&self.base.device, &view, &self.base.queue),
+            );
         }
 
-        self.queue.submit(command_buffers);
+        self.base.queue.submit(command_buffers);
         output.present();
 
         Ok(())
     }
 
     pub fn window(&self) -> &Window {
-        &self.window
+        &self.base.window
     }
 
     pub async fn new(window: Window) -> Self {
-        let size = window.inner_size();
+        let base = BaseRenderer::new(window).await;
 
-        // The instance is a handle to our GPU
-        // Backends::all => Vulkan + Metal + DX12 + Browser WebGPU
-        let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
-            backends: wgpu::Backends::PRIMARY,
-            dx12_shader_compiler: Default::default(),
-        });
-
-        // # Safety
-        //
-        // The surface needs to live as long as the window that created it.
-        // Renderer owns the window so this should be safe.
-        let surface = unsafe { instance.create_surface(&window) }.unwrap();
-
-        let adapter = instance
-            .request_adapter(&wgpu::RequestAdapterOptions {
-                power_preference: wgpu::PowerPreference::default(),
-                compatible_surface: Some(&surface),
-                force_fallback_adapter: false,
-            })
-            .await
-            .unwrap();
-
-        let (device, queue) = adapter
-            .request_device(
-                &wgpu::DeviceDescriptor {
-                    features: wgpu::Features::empty(),
-                    // WebGL doesn't support all of wgpu's features, so if
-                    // we're building for the web we'll have to disable some.
-                    limits: if cfg!(target_arch = "wasm32") {
-                        wgpu::Limits::downlevel_webgl2_defaults()
-                    } else {
-                        wgpu::Limits::default()
-                    },
-                    label: None,
-                },
-                None, // Trace path
-            )
-            .await
-            .unwrap();
-
-        let surface_caps = surface.get_capabilities(&adapter);
-
-        // Shader code in this tutorial assumes an sRGB surface texture. Using a different
-        // one will result all the colors coming out darker. If you want to support non
-        // sRGB surfaces, you'll need to account for that when drawing to the frame.
-        let surface_format = surface_caps
-            .formats
-            .iter()
-            .copied()
-            .find(|f| f.describe().srgb)
-            .unwrap_or(surface_caps.formats[0]);
-
-        let config = wgpu::SurfaceConfiguration {
-            usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
-            format: surface_format,
-            width: size.width,
-            height: size.height,
-            present_mode: surface_caps.present_modes[0],
-            alpha_mode: surface_caps.alpha_modes[0],
-            view_formats: vec![],
-        };
-
-        surface.configure(&device, &config);
-
-        let world_texture = device.create_texture(&wgpu::TextureDescriptor {
+        let world_texture = base.device.create_texture(&wgpu::TextureDescriptor {
             size: WORLD_TEXTURE_SIZE,
             mip_level_count: 1,
             sample_count: 1,
@@ -198,9 +137,9 @@ impl Renderer {
         // We don't need to configure the texture view much, so let's
         // let wgpu define it.
         let world_texture_view = world_texture.create_view(&wgpu::TextureViewDescriptor::default());
-        let circle_texture_view = load_pixel_png(&device, &queue);
+        let circle_texture_view = load_pixel_png(&base.device, &base.queue);
 
-        let pixel_art_sampler = device.create_sampler(&wgpu::SamplerDescriptor {
+        let pixel_art_sampler = base.device.create_sampler(&wgpu::SamplerDescriptor {
             address_mode_u: wgpu::AddressMode::ClampToEdge,
             address_mode_v: wgpu::AddressMode::ClampToEdge,
             address_mode_w: wgpu::AddressMode::ClampToEdge,
@@ -210,17 +149,21 @@ impl Renderer {
             ..Default::default()
         });
 
-        let sprite_renderer =
-            SpriteRenderer::new(&config, &device, size.width as f32, size.height as f32);
+        let sprite_renderer = SpriteRenderer::new(
+            &base.config,
+            &base.device,
+            base.size.width as f32,
+            base.size.height as f32,
+        );
 
         let world_bind_group = sprite_renderer.create_texture_bind_group(
-            &device,
+            &base.device,
             &pixel_art_sampler,
             &world_texture_view,
         );
 
         let circle_bind_group = sprite_renderer.create_texture_bind_group(
-            &device,
+            &base.device,
             &pixel_art_sampler,
             &circle_texture_view,
         );
@@ -229,31 +172,26 @@ impl Renderer {
             "../assets/FiraCode-Regular.ttf"
         ))
         .unwrap()
-        .build(&device, &config);
+        .build(&base.device, &base.config);
 
         Self {
             text_brush,
             sprite_renderer,
-            window,
             world_texture,
             circle_bind_group,
             world_bind_group,
-            surface,
-            device,
-            queue,
-            config,
-            size,
+            base,
         }
     }
 
     pub fn resize(&mut self, new_size: winit::dpi::PhysicalSize<u32>) {
         if new_size.width > 0 && new_size.height > 0 {
-            self.text_brush
-                .resize_view(new_size.width as f32, new_size.height as f32, &self.queue);
-            self.size = new_size;
-            self.config.width = new_size.width;
-            self.config.height = new_size.height;
-            self.surface.configure(&self.device, &self.config);
+            self.text_brush.resize_view(
+                new_size.width as f32,
+                new_size.height as f32,
+                &self.base.queue,
+            );
+            self.base.resize(new_size);
         }
     }
 }

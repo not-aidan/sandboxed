@@ -11,6 +11,7 @@ use winit::{
 
 use worm::Worm;
 
+mod base_renderer;
 mod renderer;
 mod sprite;
 mod world;
@@ -111,7 +112,7 @@ async fn main() -> Result<(), ()> {
                 match renderer.render(&world, &worms, &[section]) {
                     Ok(_) => {}
                     // Reconfigure the surface if lost
-                    Err(wgpu::SurfaceError::Lost) => renderer.resize(renderer.size),
+                    Err(wgpu::SurfaceError::Lost) => renderer.resize(renderer.size()),
                     // The system is out of memory, we should probably quit
                     Err(wgpu::SurfaceError::OutOfMemory) => *control_flow = ControlFlow::Exit,
                     // All other errors (Outdated, Timeout) should be resolved by the next frame
