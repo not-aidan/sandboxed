@@ -61,7 +61,7 @@ impl Worm {
 }
 
 #[derive(Clone, Copy)]
-pub struct WormSegment(Vector2<f32>);
+pub struct WormSegment(pub Vector2<f32>);
 
 impl WormSegment {
     pub fn force(&self) -> world::Force {

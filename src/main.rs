@@ -108,7 +108,7 @@ async fn main() -> Result<(), ()> {
                     .add_text(Text::new(&fps))
                     .with_layout(Layout::default().h_align(HorizontalAlign::Left));
 
-                match renderer.render(&world, &[section]) {
+                match renderer.render(&world, &worms, &[section]) {
                     Ok(_) => {}
                     // Reconfigure the surface if lost
                     Err(wgpu::SurfaceError::Lost) => renderer.resize(renderer.size),

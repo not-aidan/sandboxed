@@ -1,9 +1,11 @@
+use nalgebra::Vector2;
 use wgpu_text::font::FontRef;
 use wgpu_text::section::Section;
 use winit::window::Window;
 
 use crate::sprite::{Sprite, SpriteBatch, SpriteRenderer};
 use crate::world::{World, WORLD_SIZE};
+use crate::worm::Worm;
 
 const WORLD_TEXTURE_SIZE: wgpu::Extent3d = wgpu::Extent3d {
     width: WORLD_SIZE,
@@ -50,6 +52,7 @@ impl Renderer {
     pub fn render(
         &mut self,
         world: &World,
+        worms: &Vec<Worm>,
         text_sections: &[Section],
     ) -> Result<(), wgpu::SurfaceError> {
         self.load_world(world);
@@ -58,6 +61,15 @@ impl Renderer {
         let view = output
             .texture
             .create_view(&wgpu::TextureViewDescriptor::default());
+
+        let mut worm_sprites = Vec::<Sprite>::new();
+        for worm in worms.iter() {
+            worm_sprites.push(position_to_sprite(&worm.head.0));
+
+            for segment in worm.segments.iter() {
+                worm_sprites.push(position_to_sprite(&segment.0));
+            }
+        }
 
         let mut command_buffers = vec![self.sprite_renderer.draw(
             &vec![
@@ -69,10 +81,7 @@ impl Renderer {
                     texture_bind_group: &self.world_bind_group,
                 },
                 SpriteBatch {
-                    sprites: vec![Sprite {
-                        position: [0.0, 0.0],
-                        size: [10.0, 10.0],
-                    }],
+                    sprites: worm_sprites,
                     texture_bind_group: &self.circle_bind_group,
                 },
             ],
@@ -305,4 +314,11 @@ fn load_pixel_png(device: &wgpu::Device, queue: &wgpu::Queue) -> wgpu::TextureVi
     );
 
     diffuse_texture.create_view(&wgpu::TextureViewDescriptor::default())
+}
+
+fn position_to_sprite(position: &Vector2<f32>) -> Sprite {
+    Sprite {
+        position: [position.x, position.y],
+        size: [10.0, 10.0],
+    }
 }

@@ -116,7 +116,7 @@ impl SpriteRenderer {
 
         let vertex_buffer = device.create_buffer_init(&util::BufferInitDescriptor {
             label: Some("Sprite Vertex Buffer"),
-            contents: &[0u8; std::mem::size_of::<Vertex>() * STARTING_LENGTH as usize],
+            contents: &[0u8; std::mem::size_of::<Vertex>() * (STARTING_LENGTH * 4) as usize],
             usage: wgpu::BufferUsages::VERTEX | BufferUsages::COPY_DST,
         });
 
@@ -317,7 +317,7 @@ impl SpriteRenderer {
             }
         }
 
-        if self.length < vertices.len() as u16 / 4 {
+        if self.length * 4 < vertices.len() as u16 {
             todo!();
         }
 
