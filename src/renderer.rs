@@ -71,7 +71,30 @@ impl Renderer {
             }
         }
 
-        let mut command_buffers = vec![self.sprite_renderer.draw(
+        let mut encoder = self.base.device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
+            label: Some("Background Command Encoder"),
+        });
+
+        let render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+            label: Some("Background Render Pass"),
+            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                view: &view,
+                resolve_target: None,
+                ops: wgpu::Operations {
+                    load: wgpu::LoadOp::Clear(wgpu::Color {
+                        r: 0.2,
+                        g: 0.3,
+                        b: 1.0,
+                        a: 1.0,
+                    }),
+                    store: true,
+                },
+            })],
+            depth_stencil_attachment: None,
+        });
+        drop(render_pass);
+
+        let mut command_buffers = vec![encoder.finish(), self.sprite_renderer.draw(
             &vec![
                 SpriteBatch {
                     sprites: vec![Sprite {
