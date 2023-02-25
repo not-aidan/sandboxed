@@ -279,7 +279,7 @@ impl SpriteRenderer {
         window_size: [f32; 2],
     ) -> CommandBuffer {
         let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
-            label: Some("wgpu-text Command Encoder"),
+            label: Some("Sprite Command Encoder"),
         });
 
         // this doesn't need to write every frame, but I don't want to overcomplicate things
@@ -290,7 +290,7 @@ impl SpriteRenderer {
         );
 
         let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-            label: Some("Render Pass"),
+            label: Some("Sprite Render Pass"),
             color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                 view,
                 resolve_target: None,
