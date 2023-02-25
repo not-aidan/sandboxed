@@ -1,47 +1,9 @@
-use std::mem;
-
-use wgpu::util::DeviceExt;
 use wgpu_text::font::FontRef;
 use wgpu_text::section::Section;
 use winit::window::Window;
 
+use crate::sprite::{Sprite, SpriteRenderer};
 use crate::world::{World, WORLD_SIZE};
-
-#[repr(C)]
-#[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
-pub struct WindowUnifrom {
-    pub size: [f32; 2],
-}
-
-#[repr(C)]
-#[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
-pub struct Vertex {
-    pub position: [f32; 2],
-    pub tex_coords: [f32; 2],
-}
-
-impl Vertex {
-    fn descriptor<'a>() -> wgpu::VertexBufferLayout<'a> {
-        wgpu::VertexBufferLayout {
-            array_stride: std::mem::size_of::<Vertex>() as wgpu::BufferAddress,
-            step_mode: wgpu::VertexStepMode::Vertex,
-            attributes: &[
-                wgpu::VertexAttribute {
-                    offset: 0,
-                    shader_location: 0,
-                    format: wgpu::VertexFormat::Float32x2,
-                },
-                wgpu::VertexAttribute {
-                    offset: mem::size_of::<[f32; 2]>() as wgpu::BufferAddress,
-                    shader_location: 1,
-                    format: wgpu::VertexFormat::Float32x2,
-                },
-            ],
-        }
-    }
-}
-
-const INDICES: &[u16] = &[0, 1, 2, 2, 3, 0];
 
 const WORLD_TEXTURE_SIZE: wgpu::Extent3d = wgpu::Extent3d {
     width: WORLD_SIZE,
@@ -54,16 +16,11 @@ pub struct Renderer {
     device: wgpu::Device,
     queue: wgpu::Queue,
     config: wgpu::SurfaceConfiguration,
+    sprite_renderer: SpriteRenderer,
     world_texture: wgpu::Texture,
-    vertex_buffer: wgpu::Buffer,
-    index_buffer: wgpu::Buffer,
-    indices: u32,
     pub size: winit::dpi::PhysicalSize<u32>,
     window: Window,
-    render_pipeline: wgpu::RenderPipeline,
     world_bind_group: wgpu::BindGroup,
-    window_buffer: wgpu::Buffer,
-    window_bind_group: wgpu::BindGroup,
     text_brush: wgpu_text::TextBrush<FontRef<'static>>,
 }
 
@@ -96,15 +53,6 @@ impl Renderer {
     ) -> Result<(), wgpu::SurfaceError> {
         self.load_world(world);
 
-        // this doesn't need to write every frame, but I don't want to overcomplicate things
-        self.queue.write_buffer(
-            &self.window_buffer,
-            0,
-            bytemuck::cast_slice(&[WindowUnifrom {
-                size: [self.size.width as f32, self.size.height as f32],
-            }]),
-        );
-
         let output = self.surface.get_current_texture()?;
         let view = output
             .texture
@@ -116,32 +64,17 @@ impl Renderer {
                 label: Some("Render Encoder"),
             });
 
-        {
-            let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                label: Some("Render Pass"),
-                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                    view: &view,
-                    resolve_target: None,
-                    ops: wgpu::Operations {
-                        load: wgpu::LoadOp::Clear(wgpu::Color {
-                            r: 0.1,
-                            g: 0.2,
-                            b: 0.3,
-                            a: 1.0,
-                        }),
-                        store: true,
-                    },
-                })],
-                depth_stencil_attachment: None,
-            });
-
-            render_pass.set_pipeline(&self.render_pipeline);
-            render_pass.set_bind_group(0, &self.world_bind_group, &[]);
-            render_pass.set_bind_group(1, &self.window_bind_group, &[]);
-            render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
-            render_pass.set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
-            render_pass.draw_indexed(0..self.indices, 0, 0..1);
-        }
+        self.sprite_renderer.draw(
+            vec![Sprite {
+                position: [0.0, 0.0],
+                size: [200.0, 200.0],
+            }],
+            &mut encoder,
+            &self.queue,
+            &self.world_bind_group,
+            &view,
+            [self.size.width as f32, self.size.height as f32],
+        );
 
         let mut command_buffers = vec![encoder.finish()];
 
@@ -229,74 +162,6 @@ impl Renderer {
 
         surface.configure(&device, &config);
 
-        // window size
-        let window_uniform = WindowUnifrom {
-            size: [size.width as f32, size.height as f32],
-        };
-
-        let window_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("Window Buffer"),
-            contents: bytemuck::cast_slice(&[window_uniform]),
-            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-        });
-
-        let window_bind_group_layout =
-            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-                entries: &[wgpu::BindGroupLayoutEntry {
-                    binding: 0,
-                    visibility: wgpu::ShaderStages::VERTEX,
-                    ty: wgpu::BindingType::Buffer {
-                        ty: wgpu::BufferBindingType::Uniform,
-                        has_dynamic_offset: false,
-                        min_binding_size: None,
-                    },
-                    count: None,
-                }],
-                label: Some("window_bind_group_layout"),
-            });
-
-        let window_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-            layout: &window_bind_group_layout,
-            entries: &[wgpu::BindGroupEntry {
-                binding: 0,
-                resource: window_buffer.as_entire_binding(),
-            }],
-            label: Some("window_bind_group"),
-        });
-
-        // shader
-        let shader = device.create_shader_module(wgpu::include_wgsl!("shader.wgsl"));
-
-        let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("Vertex Buffer"),
-            contents: bytemuck::cast_slice(&[
-                Vertex {
-                    position: [-100.0, -100.0],
-                    tex_coords: [0.0, 0.0],
-                },
-                Vertex {
-                    position: [100.0, -100.0],
-                    tex_coords: [1.0, 0.0],
-                },
-                Vertex {
-                    position: [100.0, 100.0],
-                    tex_coords: [1.0, 1.0],
-                },
-                Vertex {
-                    position: [-100.0, 100.0],
-                    tex_coords: [0.0, 1.0],
-                },
-            ]),
-            usage: wgpu::BufferUsages::VERTEX,
-        });
-
-        let index_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("Index Buffer"),
-            contents: bytemuck::cast_slice(INDICES),
-            usage: wgpu::BufferUsages::INDEX,
-        });
-        let indices = INDICES.len() as u32;
-
         let world_texture = device.create_texture(&wgpu::TextureDescriptor {
             size: WORLD_TEXTURE_SIZE,
             mip_level_count: 1,
@@ -331,90 +196,11 @@ impl Renderer {
             ..Default::default()
         });
 
-        let texture_bind_group_layout =
-            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-                entries: &[
-                    wgpu::BindGroupLayoutEntry {
-                        binding: 0,
-                        visibility: wgpu::ShaderStages::FRAGMENT,
-                        ty: wgpu::BindingType::Texture {
-                            multisampled: false,
-                            view_dimension: wgpu::TextureViewDimension::D2,
-                            sample_type: wgpu::TextureSampleType::Float { filterable: true },
-                        },
-                        count: None,
-                    },
-                    wgpu::BindGroupLayoutEntry {
-                        binding: 1,
-                        visibility: wgpu::ShaderStages::FRAGMENT,
-                        // This should match the filterable field of the
-                        // corresponding Texture entry above.
-                        ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
-                        count: None,
-                    },
-                ],
-                label: Some("texture_bind_group_layout"),
-            });
+        let sprite_renderer =
+            SpriteRenderer::new(&config, &device, size.width as f32, size.height as f32);
 
-        let world_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-            layout: &texture_bind_group_layout,
-            entries: &[
-                wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: wgpu::BindingResource::TextureView(&world_texture_view),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 1,
-                    resource: wgpu::BindingResource::Sampler(&world_sampler),
-                },
-            ],
-            label: Some("world_bind_group"),
-        });
-
-        let render_pipeline_layout =
-            device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-                label: Some("Render Pipeline Layout"),
-                bind_group_layouts: &[&texture_bind_group_layout, &window_bind_group_layout],
-                push_constant_ranges: &[],
-            });
-
-        let render_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-            label: Some("Render Pipeline"),
-            layout: Some(&render_pipeline_layout),
-            vertex: wgpu::VertexState {
-                module: &shader,
-                entry_point: "vs_main",
-                buffers: &[Vertex::descriptor()],
-            },
-            fragment: Some(wgpu::FragmentState {
-                module: &shader,
-                entry_point: "fs_main",
-                targets: &[Some(wgpu::ColorTargetState {
-                    format: config.format,
-                    blend: Some(wgpu::BlendState::REPLACE),
-                    write_mask: wgpu::ColorWrites::ALL,
-                })],
-            }),
-            primitive: wgpu::PrimitiveState {
-                topology: wgpu::PrimitiveTopology::TriangleList,
-                strip_index_format: None,
-                front_face: wgpu::FrontFace::Ccw,
-                cull_mode: Some(wgpu::Face::Back),
-                // Setting this to anything other than Fill requires Features::NON_FILL_POLYGON_MODE
-                polygon_mode: wgpu::PolygonMode::Fill,
-                // Requires Features::DEPTH_CLIP_CONTROL
-                unclipped_depth: false,
-                // Requires Features::CONSERVATIVE_RASTERIZATION
-                conservative: false,
-            },
-            depth_stencil: None,
-            multisample: wgpu::MultisampleState {
-                count: 1,
-                mask: !0,
-                alpha_to_coverage_enabled: false,
-            },
-            multiview: None,
-        });
+        let world_bind_group =
+            sprite_renderer.create_texture_bind_group(&device, &world_sampler, &world_texture_view);
 
         let text_brush = wgpu_text::BrushBuilder::using_font_bytes(include_bytes!(
             "../assets/FiraCode-Regular.ttf"
@@ -424,20 +210,15 @@ impl Renderer {
 
         Self {
             text_brush,
-            indices,
+            sprite_renderer,
             window,
             world_texture,
             world_bind_group,
             surface,
-            window_buffer,
-            window_bind_group,
             device,
             queue,
             config,
             size,
-            render_pipeline,
-            vertex_buffer,
-            index_buffer,
         }
     }
 

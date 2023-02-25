@@ -12,6 +12,7 @@ use winit::{
 use worm::Worm;
 
 mod renderer;
+mod sprite;
 mod world;
 mod worm;
 
@@ -33,7 +34,13 @@ async fn main() -> Result<(), ()> {
     let mut world = World::default();
     let mut renderer = Renderer::new(window).await;
 
-    let mut worms = vec![Worm::new(7, Vector2::new(30.0, 30.0), Vector2::new(1.0, 1.0).normalize(), 10.0, 4.0)];
+    let mut worms = vec![Worm::new(
+        7,
+        Vector2::new(30.0, 30.0),
+        Vector2::new(1.0, 1.0).normalize(),
+        10.0,
+        4.0,
+    )];
 
     event_loop.run(move |event, _, control_flow| {
         match event {
@@ -65,7 +72,6 @@ async fn main() -> Result<(), ()> {
 
                 let time_since_world_step = time.duration_since(last_world_step).as_secs_f32();
                 if time_since_world_step >= WORLD_UPDATE_TIME {
-                    
                     let coordinate = Coordinate::new(WORLD_SIZE / 2, WORLD_SIZE - 1);
 
                     if world.get_cell(&coordinate) == Some(world::CellElement::Air) {
