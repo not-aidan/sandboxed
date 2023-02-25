@@ -105,6 +105,24 @@ pub struct SpriteBatch<'a> {
     pub texture_bind_group: &'a BindGroup,
 }
 
+fn create_vertex_buffer(sprite_count: u16, device: &Device) -> wgpu::Buffer {
+    device.create_buffer_init(&util::BufferInitDescriptor {
+        label: Some("Sprite Vertex Buffer"),
+        contents: &vec![0u8; std::mem::size_of::<Vertex>() * (sprite_count * 4) as usize],
+        usage: wgpu::BufferUsages::VERTEX | BufferUsages::COPY_DST,
+    })
+}
+
+fn create_index_buffer(sprite_count: u16, device: &Device) -> wgpu::Buffer {
+    let index_buffer = device.create_buffer_init(&util::BufferInitDescriptor {
+        label: Some("Sprite Index Buffer"),
+        contents: bytemuck::cast_slice(&indices(sprite_count)),
+        usage: wgpu::BufferUsages::INDEX | BufferUsages::COPY_DST,
+    });
+
+    index_buffer
+}
+
 impl SpriteRenderer {
     pub fn new(
         config: &SurfaceConfiguration,
@@ -114,17 +132,8 @@ impl SpriteRenderer {
     ) -> Self {
         let shader = device.create_shader_module(include_wgsl!("sprite.wgsl"));
 
-        let vertex_buffer = device.create_buffer_init(&util::BufferInitDescriptor {
-            label: Some("Sprite Vertex Buffer"),
-            contents: &[0u8; std::mem::size_of::<Vertex>() * (STARTING_LENGTH * 4) as usize],
-            usage: wgpu::BufferUsages::VERTEX | BufferUsages::COPY_DST,
-        });
-
-        let index_buffer = device.create_buffer_init(&util::BufferInitDescriptor {
-            label: Some("Sprite Index Buffer"),
-            contents: bytemuck::cast_slice(&indices(STARTING_LENGTH)),
-            usage: wgpu::BufferUsages::INDEX | BufferUsages::COPY_DST,
-        });
+        let vertex_buffer = create_vertex_buffer(STARTING_LENGTH, device);
+        let index_buffer = create_index_buffer(STARTING_LENGTH, device);
 
         let texture_bind_group_layout =
             device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
@@ -302,9 +311,6 @@ impl SpriteRenderer {
             depth_stencil_attachment: None,
         });
 
-        render_pass.set_pipeline(&self.pipeline);
-        render_pass.set_bind_group(1, &self.window_bind_group, &[]);
-
         let mut vertices = Vec::<Vertex>::new();
 
         for batch in sprite_batches.iter() {
@@ -316,10 +322,14 @@ impl SpriteRenderer {
                 vertices.push(sprite_vertices[3]);
             }
         }
+        let sprite_count = vertices.len() as u16 / 4;
 
-        if self.length * 4 < vertices.len() as u16 {
-            todo!();
+        if self.length < sprite_count {
+            self.resize(sprite_count, device);
         }
+
+        render_pass.set_pipeline(&self.pipeline);
+        render_pass.set_bind_group(1, &self.window_bind_group, &[]);
 
         // can only write to buffer once a frame
         queue.write_buffer(&self.vertex_buffer, 0, bytemuck::cast_slice(&vertices));
@@ -338,5 +348,14 @@ impl SpriteRenderer {
 
         drop(render_pass);
         encoder.finish()
+    }
+
+    pub fn resize(&mut self, sprite_count: u16, device: &Device) {
+        if sprite_count == 0 {
+            return;
+        }
+        self.vertex_buffer = create_vertex_buffer(sprite_count, device);
+        self.index_buffer = create_index_buffer(sprite_count, device);
+        self.length = sprite_count;
     }
 }
