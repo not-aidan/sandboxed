@@ -68,7 +68,7 @@ impl WormSegment {
         world::Force {
             position: self.0,
             strength: 120.0,
-            max_distance_squared: 600.0,
+            max_distance_squared: 900.0,
             min_distance_squared: 80.0,
         }
     }

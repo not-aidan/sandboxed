@@ -1,15 +1,16 @@
 use nalgebra::Vector2;
 use rand::Rng;
 
-pub const WORLD_SIZE: u32 = 100;
-pub const GRAVITY: Vector2<f32> = Vector2::new(0.0, -0.3);
+pub const WORLD_SIZE: u32 = 200;
+pub const HALF_WORLD_SIZE: u32 = WORLD_SIZE / 2;
+pub const GRAVITY: Vector2<f32> = Vector2::new(0.0, -0.2);
 const AIR_FRICTION: f32 = 0.25;
 
 pub type Coordinate = Vector2<u32>;
 
 trait Difference<T> {
     fn difference(&self, other: &Self) -> T;
-    fn as_f32(&self) -> Vector2<f32>;
+    fn position(&self) -> Vector2<f32>;
     fn in_bounds(&self) -> bool;
 }
 
@@ -21,8 +22,8 @@ impl Difference<Vector2<i32>> for Coordinate {
         )
     }
 
-    fn as_f32(&self) -> Vector2<f32> {
-        Vector2::new(self.x as f32, self.y as f32)
+    fn position(&self) -> Vector2<f32> {
+        Vector2::new(self.x as f32 - HALF_WORLD_SIZE as f32, self.y as f32 - HALF_WORLD_SIZE as f32)
     }
 
     fn in_bounds(&self) -> bool {
@@ -132,7 +133,7 @@ impl World {
             velocity += GRAVITY;
 
             {
-                let position = coordinate.as_f32();
+                let position = coordinate.position();
                 for force in forces.iter() {
                     let difference = force.position - position;
                     let distance_squared = difference.magnitude_squared();

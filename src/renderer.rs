@@ -76,7 +76,7 @@ impl Renderer {
                 SpriteBatch {
                     sprites: vec![Sprite {
                         position: [0.0, 0.0],
-                        size: [200.0, 200.0],
+                        size: [WORLD_SIZE as f32, WORLD_SIZE as f32],
                     }],
                     texture_bind_group: &self.world_bind_group,
                 },
