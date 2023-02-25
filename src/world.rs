@@ -1,7 +1,7 @@
 use nalgebra::Vector2;
 use rand::Rng;
 
-pub const WORLD_SIZE: u32 = 200;
+pub const WORLD_SIZE: u32 = 300;
 pub const HALF_WORLD_SIZE: u32 = WORLD_SIZE / 2;
 pub const GRAVITY: Vector2<f32> = Vector2::new(0.0, -0.2);
 const AIR_FRICTION: f32 = 0.25;

@@ -24,16 +24,23 @@ use self::{
 
 const WORLD_UPDATE_TIME: f32 = 0.1;
 const TARGET_FPS: f64 = 1.0 / 60.0;
+const STACK_SIZE: usize = 10_000_000;
 
-#[tokio::main]
-async fn main() -> Result<(), ()> {
+
+fn main() {
+    let rt = tokio::runtime::Builder::new_multi_thread().thread_stack_size(STACK_SIZE).build().unwrap();
+    rt.block_on(game()).unwrap();
+}
+
+async fn game() -> Result<(), ()> {
     env_logger::init();
     let event_loop = EventLoop::new();
     let window = WindowBuilder::new().build(&event_loop).unwrap();
     let mut last_frame = Instant::now();
     let mut last_world_step = Instant::now();
-    let mut world = World::default();
     let mut renderer = Renderer::new(window).await;
+    let mut world = World::default();
+    println!("World bytes: {}", std::mem::size_of::<World>());
 
     let mut worms = vec![Worm::new(
         7,
