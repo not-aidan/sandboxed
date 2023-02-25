@@ -59,7 +59,7 @@ impl Renderer {
             .texture
             .create_view(&wgpu::TextureViewDescriptor::default());
 
-        self.sprite_renderer.draw(
+        let mut command_buffers = vec![self.sprite_renderer.draw(
             &vec![
                 SpriteBatch {
                     sprites: vec![Sprite {
@@ -80,9 +80,7 @@ impl Renderer {
             &self.queue,
             &view,
             [self.size.width as f32, self.size.height as f32],
-        );
-
-        let mut command_buffers = vec![];
+        )];
 
         // text
         for section in text_sections.iter() {
@@ -90,7 +88,6 @@ impl Renderer {
             command_buffers.push(self.text_brush.draw(&self.device, &view, &self.queue));
         }
 
-        // submit will accept anything that implements IntoIter
         self.queue.submit(command_buffers);
         output.present();
 

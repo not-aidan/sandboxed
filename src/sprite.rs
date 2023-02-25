@@ -277,7 +277,11 @@ impl SpriteRenderer {
         queue: &Queue,
         view: &TextureView,
         window_size: [f32; 2],
-    ) {
+    ) -> CommandBuffer {
+        let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
+            label: Some("wgpu-text Command Encoder"),
+        });
+
         // this doesn't need to write every frame, but I don't want to overcomplicate things
         queue.write_buffer(
             &self.window_buffer,
@@ -285,51 +289,54 @@ impl SpriteRenderer {
             bytemuck::cast_slice(&[WindowUnifrom { size: window_size }]),
         );
 
+        let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+            label: Some("Render Pass"),
+            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                view,
+                resolve_target: None,
+                ops: wgpu::Operations {
+                    load: wgpu::LoadOp::Load,
+                    store: true,
+                },
+            })],
+            depth_stencil_attachment: None,
+        });
+
+        render_pass.set_pipeline(&self.pipeline);
+        render_pass.set_bind_group(1, &self.window_bind_group, &[]);
+
+        let mut vertices = Vec::<Vertex>::new();
+
         for batch in sprite_batches.iter() {
-            let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                label: Some("wgpu-text Command Encoder"),
-            });
-
-            let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                label: Some("Render Pass"),
-                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                    view,
-                    resolve_target: None,
-                    ops: wgpu::Operations {
-                        load: wgpu::LoadOp::Load,
-                        store: true,
-                    },
-                })],
-                depth_stencil_attachment: None,
-            });
-
-            render_pass.set_pipeline(&self.pipeline);
-            render_pass.set_bind_group(1, &self.window_bind_group, &[]);
-
-            let sprites = &batch.sprites;
-            let num_sprites = sprites.len() as u32;
-            if self.length < num_sprites as u16 {
-                todo!();
-            }
-
-            let mut vertices = Vec::<Vertex>::new();
-
-            for sprite in sprites.iter() {
+            for sprite in batch.sprites.iter() {
                 let sprite_vertices = sprite.vertices();
                 vertices.push(sprite_vertices[0]);
                 vertices.push(sprite_vertices[1]);
                 vertices.push(sprite_vertices[2]);
                 vertices.push(sprite_vertices[3]);
             }
+        }
 
-            queue.write_buffer(&self.vertex_buffer, 0, bytemuck::cast_slice(&vertices));
+        if self.length < vertices.len() as u16 / 4 {
+            todo!();
+        }
+
+        // can only write to buffer once a frame
+        queue.write_buffer(&self.vertex_buffer, 0, bytemuck::cast_slice(&vertices));
+
+        let mut offset = 0;
+        for batch in sprite_batches.iter() {
+            let sprite_indicies = batch.sprites.len() as u32 * 6;
 
             render_pass.set_bind_group(0, batch.texture_bind_group, &[]);
             render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
             render_pass.set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
-            render_pass.draw_indexed(0..num_sprites * 6, 0, 0..1);
-            drop(render_pass);
-            queue.submit(vec![encoder.finish()]);
+            render_pass.draw_indexed(offset..offset + sprite_indicies, 0, 0..1);
+
+            offset += sprite_indicies;
         }
+
+        drop(render_pass);
+        encoder.finish()
     }
 }
