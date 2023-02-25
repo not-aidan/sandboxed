@@ -23,7 +23,10 @@ impl Difference<Vector2<i32>> for Coordinate {
     }
 
     fn position(&self) -> Vector2<f32> {
-        Vector2::new(self.x as f32 - HALF_WORLD_SIZE as f32, self.y as f32 - HALF_WORLD_SIZE as f32)
+        Vector2::new(
+            self.x as f32 - HALF_WORLD_SIZE as f32,
+            self.y as f32 - HALF_WORLD_SIZE as f32,
+        )
     }
 
     fn in_bounds(&self) -> bool {
@@ -92,9 +95,15 @@ pub struct World {
 
 impl Default for World {
     fn default() -> Self {
-        Self {
-            cells: [[CellElement::Air; WORLD_SIZE as usize]; WORLD_SIZE as usize],
+        let mut cells = [[CellElement::Air; WORLD_SIZE as usize]; WORLD_SIZE as usize];
+
+        for row in cells.iter_mut().take(30) {
+            for cell in row.iter_mut() {
+                *cell = CellElement::Sand(Vector2::zeros());
+            }
         }
+
+        Self { cells }
     }
 }
 

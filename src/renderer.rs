@@ -71,9 +71,12 @@ impl Renderer {
             }
         }
 
-        let mut encoder = self.base.device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
-            label: Some("Background Command Encoder"),
-        });
+        let mut encoder =
+            self.base
+                .device
+                .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                    label: Some("Background Command Encoder"),
+                });
 
         let render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some("Background Render Pass"),
@@ -94,25 +97,28 @@ impl Renderer {
         });
         drop(render_pass);
 
-        let mut command_buffers = vec![encoder.finish(), self.sprite_renderer.draw(
-            &vec![
-                SpriteBatch {
-                    sprites: vec![Sprite {
-                        position: [0.0, 0.0],
-                        size: [WORLD_SIZE as f32, WORLD_SIZE as f32],
-                    }],
-                    texture_bind_group: &self.world_bind_group,
-                },
-                SpriteBatch {
-                    sprites: worm_sprites,
-                    texture_bind_group: &self.circle_bind_group,
-                },
-            ],
-            &self.base.device,
-            &self.base.queue,
-            &view,
-            [self.base.size.width as f32, self.base.size.height as f32],
-        )];
+        let mut command_buffers = vec![
+            encoder.finish(),
+            self.sprite_renderer.draw(
+                &vec![
+                    SpriteBatch {
+                        sprites: vec![Sprite {
+                            position: [0.0, 0.0],
+                            size: [WORLD_SIZE as f32, WORLD_SIZE as f32],
+                        }],
+                        texture_bind_group: &self.world_bind_group,
+                    },
+                    SpriteBatch {
+                        sprites: worm_sprites,
+                        texture_bind_group: &self.circle_bind_group,
+                    },
+                ],
+                &self.base.device,
+                &self.base.queue,
+                &view,
+                [self.base.size.width as f32, self.base.size.height as f32],
+            ),
+        ];
 
         // text
         for section in text_sections.iter() {
