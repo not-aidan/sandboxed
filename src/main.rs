@@ -9,8 +9,11 @@ use winit::{
     window::WindowBuilder,
 };
 
+use worm::Worm;
+
 mod renderer;
 mod world;
+mod worm;
 
 use self::{
     renderer::Renderer,
@@ -30,7 +33,7 @@ async fn main() -> Result<(), ()> {
     let mut world = World::default();
     let mut renderer = Renderer::new(window).await;
 
-    let worms = vec![Vector2::new(30.0, 30.0)];
+    let mut worms = vec![Worm::new(7, Vector2::new(30.0, 30.0), Vector2::new(1.0, 1.0).normalize(), 10.0, 4.0)];
 
     event_loop.run(move |event, _, control_flow| {
         match event {
@@ -60,7 +63,9 @@ async fn main() -> Result<(), ()> {
                     return;
                 }
 
-                if time.duration_since(last_world_step).as_secs_f32() >= WORLD_UPDATE_TIME {
+                let time_since_world_step = time.duration_since(last_world_step).as_secs_f32();
+                if time_since_world_step >= WORLD_UPDATE_TIME {
+                    
                     let coordinate = Coordinate::new(WORLD_SIZE / 2, WORLD_SIZE - 1);
 
                     if world.get_cell(&coordinate) == Some(world::CellElement::Air) {
@@ -74,13 +79,11 @@ async fn main() -> Result<(), ()> {
                     }
 
                     let mut forces = Vec::<world::Force>::new();
-                    for worm in worms.iter() {
-                        forces.push(world::Force {
-                            position: *worm,
-                            strength: 120.0,
-                            max_distance_squared: 600.0,
-                            min_distance_squared: 80.0,
-                        });
+                    for worm in worms.iter_mut() {
+                        worm.step_ai(time_since_world_step);
+                        for segment in worm.segments.iter() {
+                            forces.push(segment.force());
+                        }
                     }
 
                     world.update(&forces);

@@ -3,7 +3,7 @@ use rand::Rng;
 
 pub const WORLD_SIZE: u32 = 100;
 pub const GRAVITY: Vector2<f32> = Vector2::new(0.0, -0.3);
-const AIR_FRICTION: f32 = 0.2;
+const AIR_FRICTION: f32 = 0.25;
 
 pub type Coordinate = Vector2<u32>;
 
