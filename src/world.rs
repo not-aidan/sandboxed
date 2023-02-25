@@ -78,7 +78,7 @@ impl CellElement {
                 pixels.push(255);
                 pixels.push(255);
                 pixels.push(0);
-                pixels.push(0);
+                pixels.push(255);
             }
         }
     }

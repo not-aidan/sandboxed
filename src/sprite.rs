@@ -100,6 +100,11 @@ impl Sprite {
     }
 }
 
+pub struct SpriteBatch<'a> {
+    pub sprites: Vec<Sprite>,
+    pub texture_bind_group: &'a BindGroup,
+}
+
 impl SpriteRenderer {
     pub fn new(
         config: &SurfaceConfiguration,
@@ -200,7 +205,18 @@ impl SpriteRenderer {
                 entry_point: "fs_main",
                 targets: &[Some(wgpu::ColorTargetState {
                     format: config.format,
-                    blend: Some(wgpu::BlendState::REPLACE),
+                    blend: Some(wgpu::BlendState {
+                        color: wgpu::BlendComponent {
+                            src_factor: wgpu::BlendFactor::SrcAlpha,
+                            dst_factor: wgpu::BlendFactor::OneMinusSrcAlpha,
+                            operation: wgpu::BlendOperation::Add,
+                        },
+                        alpha: wgpu::BlendComponent {
+                            src_factor: wgpu::BlendFactor::One,
+                            dst_factor: wgpu::BlendFactor::OneMinusSrcAlpha,
+                            operation: wgpu::BlendOperation::Add,
+                        },
+                    }),
                     write_mask: wgpu::ColorWrites::ALL,
                 })],
             }),
@@ -217,11 +233,7 @@ impl SpriteRenderer {
                 conservative: false,
             },
             depth_stencil: None,
-            multisample: wgpu::MultisampleState {
-                count: 1,
-                mask: !0,
-                alpha_to_coverage_enabled: false,
-            },
+            multisample: wgpu::MultisampleState::default(),
             multiview: None,
         });
 
@@ -260,10 +272,9 @@ impl SpriteRenderer {
 
     pub fn draw(
         &mut self,
-        sprites: Vec<Sprite>,
-        encoder: &mut CommandEncoder,
+        sprite_batches: &Vec<SpriteBatch>,
+        device: &Device,
         queue: &Queue,
-        texture_bind_group: &BindGroup,
         view: &TextureView,
         window_size: [f32; 2],
     ) {
@@ -274,46 +285,51 @@ impl SpriteRenderer {
             bytemuck::cast_slice(&[WindowUnifrom { size: window_size }]),
         );
 
-        let num_sprites = sprites.len() as u32;
-        if self.length < num_sprites as u16 {
-            todo!();
+        for batch in sprite_batches.iter() {
+            let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                label: Some("wgpu-text Command Encoder"),
+            });
+
+            let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                label: Some("Render Pass"),
+                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                    view,
+                    resolve_target: None,
+                    ops: wgpu::Operations {
+                        load: wgpu::LoadOp::Load,
+                        store: true,
+                    },
+                })],
+                depth_stencil_attachment: None,
+            });
+
+            render_pass.set_pipeline(&self.pipeline);
+            render_pass.set_bind_group(1, &self.window_bind_group, &[]);
+
+            let sprites = &batch.sprites;
+            let num_sprites = sprites.len() as u32;
+            if self.length < num_sprites as u16 {
+                todo!();
+            }
+
+            let mut vertices = Vec::<Vertex>::new();
+
+            for sprite in sprites.iter() {
+                let sprite_vertices = sprite.vertices();
+                vertices.push(sprite_vertices[0]);
+                vertices.push(sprite_vertices[1]);
+                vertices.push(sprite_vertices[2]);
+                vertices.push(sprite_vertices[3]);
+            }
+
+            queue.write_buffer(&self.vertex_buffer, 0, bytemuck::cast_slice(&vertices));
+
+            render_pass.set_bind_group(0, batch.texture_bind_group, &[]);
+            render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
+            render_pass.set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
+            render_pass.draw_indexed(0..num_sprites * 6, 0, 0..1);
+            drop(render_pass);
+            queue.submit(vec![encoder.finish()]);
         }
-
-        let mut vertices = Vec::<Vertex>::new();
-
-        for sprite in sprites.iter() {
-            let sprite_vertices = sprite.vertices();
-            vertices.push(sprite_vertices[0]);
-            vertices.push(sprite_vertices[1]);
-            vertices.push(sprite_vertices[2]);
-            vertices.push(sprite_vertices[3]);
-        }
-
-        queue.write_buffer(&self.vertex_buffer, 0, bytemuck::cast_slice(&vertices));
-
-        let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-            label: Some("Render Pass"),
-            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                view,
-                resolve_target: None,
-                ops: wgpu::Operations {
-                    load: wgpu::LoadOp::Clear(wgpu::Color {
-                        r: 0.1,
-                        g: 0.2,
-                        b: 0.3,
-                        a: 1.0,
-                    }),
-                    store: true,
-                },
-            })],
-            depth_stencil_attachment: None,
-        });
-
-        render_pass.set_pipeline(&self.pipeline);
-        render_pass.set_bind_group(0, texture_bind_group, &[]);
-        render_pass.set_bind_group(1, &self.window_bind_group, &[]);
-        render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
-        render_pass.set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
-        render_pass.draw_indexed(0..num_sprites * 6, 0, 0..1);
     }
 }

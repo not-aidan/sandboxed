@@ -266,6 +266,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "color_quant"
+version = "1.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3d7b894f5411737b7867f4827955924d7c254fc9f4d91a6aad6b097804b1018b"
+
+[[package]]
 name = "com-rs"
 version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -645,6 +651,20 @@ name = "humantime"
 version = "2.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9a3a5bfb195931eeb336b2a7b4d761daec841b97f947d34394601737a7bba5e4"
+
+[[package]]
+name = "image"
+version = "0.24.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "69b7ea949b537b0fd0af141fff8c77690f2ce96f4f41f042ccb6c69c6c965945"
+dependencies = [
+ "bytemuck",
+ "byteorder",
+ "color_quant",
+ "num-rational",
+ "num-traits",
+ "png",
+]
 
 [[package]]
 name = "indexmap"
@@ -1404,6 +1424,7 @@ version = "0.1.0"
 dependencies = [
  "bytemuck",
  "env_logger",
+ "image",
  "log",
  "nalgebra",
  "rand",

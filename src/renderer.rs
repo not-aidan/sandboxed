@@ -2,7 +2,7 @@ use wgpu_text::font::FontRef;
 use wgpu_text::section::Section;
 use winit::window::Window;
 
-use crate::sprite::{Sprite, SpriteRenderer};
+use crate::sprite::{Sprite, SpriteBatch, SpriteRenderer};
 use crate::world::{World, WORLD_SIZE};
 
 const WORLD_TEXTURE_SIZE: wgpu::Extent3d = wgpu::Extent3d {
@@ -21,6 +21,7 @@ pub struct Renderer {
     pub size: winit::dpi::PhysicalSize<u32>,
     window: Window,
     world_bind_group: wgpu::BindGroup,
+    circle_bind_group: wgpu::BindGroup,
     text_brush: wgpu_text::TextBrush<FontRef<'static>>,
 }
 
@@ -58,25 +59,30 @@ impl Renderer {
             .texture
             .create_view(&wgpu::TextureViewDescriptor::default());
 
-        let mut encoder = self
-            .device
-            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                label: Some("Render Encoder"),
-            });
-
         self.sprite_renderer.draw(
-            vec![Sprite {
-                position: [0.0, 0.0],
-                size: [200.0, 200.0],
-            }],
-            &mut encoder,
+            &vec![
+                SpriteBatch {
+                    sprites: vec![Sprite {
+                        position: [0.0, 0.0],
+                        size: [200.0, 200.0],
+                    }],
+                    texture_bind_group: &self.world_bind_group,
+                },
+                SpriteBatch {
+                    sprites: vec![Sprite {
+                        position: [0.0, 0.0],
+                        size: [10.0, 10.0],
+                    }],
+                    texture_bind_group: &self.circle_bind_group,
+                },
+            ],
+            &self.device,
             &self.queue,
-            &self.world_bind_group,
             &view,
             [self.size.width as f32, self.size.height as f32],
         );
 
-        let mut command_buffers = vec![encoder.finish()];
+        let mut command_buffers = vec![];
 
         // text
         for section in text_sections.iter() {
@@ -186,7 +192,9 @@ impl Renderer {
         // We don't need to configure the texture view much, so let's
         // let wgpu define it.
         let world_texture_view = world_texture.create_view(&wgpu::TextureViewDescriptor::default());
-        let world_sampler = device.create_sampler(&wgpu::SamplerDescriptor {
+        let circle_texture_view = load_pixel_png(&device, &queue);
+
+        let pixel_art_sampler = device.create_sampler(&wgpu::SamplerDescriptor {
             address_mode_u: wgpu::AddressMode::ClampToEdge,
             address_mode_v: wgpu::AddressMode::ClampToEdge,
             address_mode_w: wgpu::AddressMode::ClampToEdge,
@@ -199,8 +207,17 @@ impl Renderer {
         let sprite_renderer =
             SpriteRenderer::new(&config, &device, size.width as f32, size.height as f32);
 
-        let world_bind_group =
-            sprite_renderer.create_texture_bind_group(&device, &world_sampler, &world_texture_view);
+        let world_bind_group = sprite_renderer.create_texture_bind_group(
+            &device,
+            &pixel_art_sampler,
+            &world_texture_view,
+        );
+
+        let circle_bind_group = sprite_renderer.create_texture_bind_group(
+            &device,
+            &pixel_art_sampler,
+            &circle_texture_view,
+        );
 
         let text_brush = wgpu_text::BrushBuilder::using_font_bytes(include_bytes!(
             "../assets/FiraCode-Regular.ttf"
@@ -213,6 +230,7 @@ impl Renderer {
             sprite_renderer,
             window,
             world_texture,
+            circle_bind_group,
             world_bind_group,
             surface,
             device,
@@ -232,4 +250,62 @@ impl Renderer {
             self.surface.configure(&self.device, &self.config);
         }
     }
+}
+
+fn load_pixel_png(device: &wgpu::Device, queue: &wgpu::Queue) -> wgpu::TextureView {
+    let diffuse_bytes = include_bytes!("../assets/circle.png");
+    let diffuse_image = image::load_from_memory(diffuse_bytes).unwrap();
+    let diffuse_rgba = diffuse_image.to_rgba8();
+
+    use image::GenericImageView;
+    let dimensions = diffuse_image.dimensions();
+
+    let texture_size = wgpu::Extent3d {
+        width: dimensions.0,
+        height: dimensions.1,
+        depth_or_array_layers: 1,
+    };
+    let diffuse_texture = device.create_texture(&wgpu::TextureDescriptor {
+        // All textures are stored as 3D, we represent our 2D texture
+        // by setting depth to 1.
+        size: texture_size,
+        mip_level_count: 1, // We'll talk about this a little later
+        sample_count: 1,
+        dimension: wgpu::TextureDimension::D2,
+        // Most images are stored using sRGB so we need to reflect that here.
+        format: wgpu::TextureFormat::Rgba8UnormSrgb,
+        // TEXTURE_BINDING tells wgpu that we want to use this texture in shaders
+        // COPY_DST means that we want to copy data to this texture
+        usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
+        label: Some("circle_texture"),
+        // This is the same as with the SurfaceConfig. It
+        // specifies what texture formats can be used to
+        // create TextureViews for this texture. The base
+        // texture format (Rgba8UnormSrgb in this case) is
+        // always supported. Note that using a different
+        // texture format is not supported on the WebGL2
+        // backend.
+        view_formats: &[],
+    });
+
+    queue.write_texture(
+        // Tells wgpu where to copy the pixel data
+        wgpu::ImageCopyTexture {
+            texture: &diffuse_texture,
+            mip_level: 0,
+            origin: wgpu::Origin3d::ZERO,
+            aspect: wgpu::TextureAspect::All,
+        },
+        // The actual pixel data
+        &diffuse_rgba,
+        // The layout of the texture
+        wgpu::ImageDataLayout {
+            offset: 0,
+            bytes_per_row: std::num::NonZeroU32::new(4 * dimensions.0),
+            rows_per_image: std::num::NonZeroU32::new(dimensions.1),
+        },
+        texture_size,
+    );
+
+    diffuse_texture.create_view(&wgpu::TextureViewDescriptor::default())
 }
