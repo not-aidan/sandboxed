@@ -1,4 +1,4 @@
-use util::DeviceExt;
+use wgpu::util::DeviceExt;
 use wgpu::*;
 
 const STARTING_LENGTH: u16 = 16;
@@ -17,20 +17,20 @@ struct Vertex {
 }
 
 impl Vertex {
-    fn descriptor<'a>() -> VertexBufferLayout<'a> {
-        VertexBufferLayout {
-            array_stride: std::mem::size_of::<Vertex>() as BufferAddress,
-            step_mode: VertexStepMode::Vertex,
+    fn descriptor<'a>() -> wgpu::VertexBufferLayout<'a> {
+        wgpu::VertexBufferLayout {
+            array_stride: std::mem::size_of::<Vertex>() as wgpu::BufferAddress,
+            step_mode: wgpu::VertexStepMode::Vertex,
             attributes: &[
-                VertexAttribute {
+                wgpu::VertexAttribute {
                     offset: 0,
                     shader_location: 0,
-                    format: VertexFormat::Float32x2,
+                    format: wgpu::VertexFormat::Float32x2,
                 },
-                VertexAttribute {
-                    offset: std::mem::size_of::<[f32; 2]>() as BufferAddress,
+                wgpu::VertexAttribute {
+                    offset: std::mem::size_of::<[f32; 2]>() as wgpu::BufferAddress,
                     shader_location: 1,
-                    format: VertexFormat::Float32x2,
+                    format: wgpu::VertexFormat::Float32x2,
                 },
             ],
         }
@@ -43,6 +43,8 @@ fn indices(sprites: u16) -> Vec<u16> {
     for i in 0..sprites {
         let offset = i * 4;
         indicies.push(offset);
+        indicies.push(1 + offset);
+        indicies.push(2 + offset);
         indicies.push(2 + offset);
         indicies.push(3 + offset);
         indicies.push(offset);
@@ -110,34 +112,34 @@ impl SpriteRenderer {
         let vertex_buffer = device.create_buffer_init(&util::BufferInitDescriptor {
             label: Some("Sprite Vertex Buffer"),
             contents: &[0u8; std::mem::size_of::<Vertex>() * STARTING_LENGTH as usize],
-            usage: BufferUsages::VERTEX | BufferUsages::COPY_DST,
+            usage: wgpu::BufferUsages::VERTEX | BufferUsages::COPY_DST,
         });
 
         let index_buffer = device.create_buffer_init(&util::BufferInitDescriptor {
             label: Some("Sprite Index Buffer"),
             contents: bytemuck::cast_slice(&indices(STARTING_LENGTH)),
-            usage: BufferUsages::INDEX | BufferUsages::COPY_DST,
+            usage: wgpu::BufferUsages::INDEX | BufferUsages::COPY_DST,
         });
 
         let texture_bind_group_layout =
-            device.create_bind_group_layout(&BindGroupLayoutDescriptor {
+            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
                 entries: &[
-                    BindGroupLayoutEntry {
+                    wgpu::BindGroupLayoutEntry {
                         binding: 0,
-                        visibility: ShaderStages::FRAGMENT,
-                        ty: BindingType::Texture {
+                        visibility: wgpu::ShaderStages::FRAGMENT,
+                        ty: wgpu::BindingType::Texture {
                             multisampled: false,
-                            view_dimension: TextureViewDimension::D2,
-                            sample_type: TextureSampleType::Float { filterable: true },
+                            view_dimension: wgpu::TextureViewDimension::D2,
+                            sample_type: wgpu::TextureSampleType::Float { filterable: true },
                         },
                         count: None,
                     },
-                    BindGroupLayoutEntry {
+                    wgpu::BindGroupLayoutEntry {
                         binding: 1,
-                        visibility: ShaderStages::FRAGMENT,
+                        visibility: wgpu::ShaderStages::FRAGMENT,
                         // This should match the filterable field of the
                         // corresponding Texture entry above.
-                        ty: BindingType::Sampler(SamplerBindingType::Filtering),
+                        ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
                         count: None,
                     },
                 ],
@@ -145,12 +147,12 @@ impl SpriteRenderer {
             });
 
         let window_bind_group_layout =
-            device.create_bind_group_layout(&BindGroupLayoutDescriptor {
-                entries: &[BindGroupLayoutEntry {
+            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                entries: &[wgpu::BindGroupLayoutEntry {
                     binding: 0,
-                    visibility: ShaderStages::VERTEX,
-                    ty: BindingType::Buffer {
-                        ty: BufferBindingType::Uniform,
+                    visibility: wgpu::ShaderStages::VERTEX,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Uniform,
                         has_dynamic_offset: false,
                         min_binding_size: None,
                     },
@@ -164,10 +166,10 @@ impl SpriteRenderer {
             size: [window_width, window_height],
         };
 
-        let window_buffer = device.create_buffer_init(&util::BufferInitDescriptor {
+        let window_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Window Buffer"),
             contents: bytemuck::cast_slice(&[window_uniform]),
-            usage: BufferUsages::UNIFORM | BufferUsages::COPY_DST,
+            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
         });
 
         let window_bind_group = device.create_bind_group(&BindGroupDescriptor {
@@ -179,43 +181,43 @@ impl SpriteRenderer {
             label: Some("window_bind_group"),
         });
 
-        let pipeline_layout = device.create_pipeline_layout(&PipelineLayoutDescriptor {
+        let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("Render Pipeline Layout"),
             bind_group_layouts: &[&texture_bind_group_layout, &window_bind_group_layout],
             push_constant_ranges: &[],
         });
 
-        let pipeline = device.create_render_pipeline(&RenderPipelineDescriptor {
+        let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
             label: Some("Render Pipeline"),
             layout: Some(&pipeline_layout),
-            vertex: VertexState {
+            vertex: wgpu::VertexState {
                 module: &shader,
                 entry_point: "vs_main",
                 buffers: &[Vertex::descriptor()],
             },
-            fragment: Some(FragmentState {
+            fragment: Some(wgpu::FragmentState {
                 module: &shader,
                 entry_point: "fs_main",
-                targets: &[Some(ColorTargetState {
+                targets: &[Some(wgpu::ColorTargetState {
                     format: config.format,
-                    blend: Some(BlendState::REPLACE),
-                    write_mask: ColorWrites::ALL,
+                    blend: Some(wgpu::BlendState::REPLACE),
+                    write_mask: wgpu::ColorWrites::ALL,
                 })],
             }),
-            primitive: PrimitiveState {
-                topology: PrimitiveTopology::TriangleList,
+            primitive: wgpu::PrimitiveState {
+                topology: wgpu::PrimitiveTopology::TriangleList,
                 strip_index_format: None,
-                front_face: FrontFace::Ccw,
-                cull_mode: Some(Face::Back),
+                front_face: wgpu::FrontFace::Ccw,
+                cull_mode: Some(wgpu::Face::Back),
                 // Setting this to anything other than Fill requires Features::NON_FILL_POLYGON_MODE
-                polygon_mode: PolygonMode::Fill,
+                polygon_mode: wgpu::PolygonMode::Fill,
                 // Requires Features::DEPTH_CLIP_CONTROL
                 unclipped_depth: false,
                 // Requires Features::CONSERVATIVE_RASTERIZATION
                 conservative: false,
             },
             depth_stencil: None,
-            multisample: MultisampleState {
+            multisample: wgpu::MultisampleState {
                 count: 1,
                 mask: !0,
                 alpha_to_coverage_enabled: false,
@@ -240,16 +242,16 @@ impl SpriteRenderer {
         sampler: &Sampler,
         view: &TextureView,
     ) -> BindGroup {
-        device.create_bind_group(&BindGroupDescriptor {
+        device.create_bind_group(&wgpu::BindGroupDescriptor {
             layout: &self.texture_bind_group_layout,
             entries: &[
-                BindGroupEntry {
+                wgpu::BindGroupEntry {
                     binding: 0,
-                    resource: BindingResource::TextureView(view),
+                    resource: wgpu::BindingResource::TextureView(view),
                 },
-                BindGroupEntry {
+                wgpu::BindGroupEntry {
                     binding: 1,
-                    resource: BindingResource::Sampler(sampler),
+                    resource: wgpu::BindingResource::Sampler(sampler),
                 },
             ],
             label: Some("world_bind_group"),
@@ -289,13 +291,13 @@ impl SpriteRenderer {
 
         queue.write_buffer(&self.vertex_buffer, 0, bytemuck::cast_slice(&vertices));
 
-        let mut render_pass = encoder.begin_render_pass(&RenderPassDescriptor {
+        let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some("Render Pass"),
-            color_attachments: &[Some(RenderPassColorAttachment {
+            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                 view,
                 resolve_target: None,
-                ops: Operations {
-                    load: LoadOp::Clear(Color {
+                ops: wgpu::Operations {
+                    load: wgpu::LoadOp::Clear(wgpu::Color {
                         r: 0.1,
                         g: 0.2,
                         b: 0.3,
@@ -311,7 +313,7 @@ impl SpriteRenderer {
         render_pass.set_bind_group(0, texture_bind_group, &[]);
         render_pass.set_bind_group(1, &self.window_bind_group, &[]);
         render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
-        render_pass.set_index_buffer(self.index_buffer.slice(..), IndexFormat::Uint16);
+        render_pass.set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
         render_pass.draw_indexed(0..num_sprites * 6, 0, 0..1);
     }
 }
